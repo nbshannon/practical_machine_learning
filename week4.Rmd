@@ -26,7 +26,7 @@ The data for this project come from this source: http://web.archive.org/web/2016
 * Data: The data consists of 19622 observations and 160 variables from a study by Ugulino and Others - Wearable Computing: Accelerometers’ Data Classification of Body Postures and Movements. An additional twenty observations are to be classified based on the model constructed through this exercise. These twenty observations are the validation data set
 * Methods: using a cross validation approach to estimate error assess variations of three machine learning models;gradient boosting machine (GBM), distributed random forest (DRF), generalised linear model (GLM).
 * Results: GBM was found to be the most accurate model with > 99% accuracy
-* 
+
 ## setup
 
 load libraries
