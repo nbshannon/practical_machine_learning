@@ -1,0 +1,132 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Data
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+# Report
+
+## setup
+
+load libraries
+```{r results='hide', message=FALSE}
+library(caret)
+library(tidyverse)
+```
+
+load data
+```{r results='hide', message=FALSE}
+# download data
+trainurl = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testurl = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+#download.file(trainurl, "pml-training.csv")
+#download.file(testurl, "pml-testing.csv")
+# load data
+# exclude variables containing NA
+# exclude first 7 variables (not used)
+not_all_na <- function(x) {!all(is.na(x))} # select columns that dont have all values NA
+not_any_na <- function(x) {!any(is.na(x))} # select columns that don't have any NA
+training <- 
+  read_csv("pml-training.csv",na=c("NA","#DIV/0!", "")) %>%
+  select_if(not_any_na) %>%
+  select(-c(1:7))
+testing <-
+  read_csv("pml-testing.csv",na=c("NA","#DIV/0!", "")) %>%
+  select_if(not_any_na) %>%
+  select(-c(1:7))
+# recode classe as numeric - now skipped (we dont save)
+ALPHA2num <- function(x) {utf8ToInt(x) - utf8ToInt("A") + 1L}
+ignore <- training %>%
+  rowwise() %>%
+  mutate(classe = ALPHA2num(classe))
+```
+split training into further training/testing for cross validation
+```{r}
+cv <- createDataPartition(y=training$classe, p=0.6, list = FALSE)
+training_train <- training[cv, ] 
+training_test <- training[-cv, ]
+```
+
+Give us a quick summary of the training data
+
+```{r}
+library(skimr)
+skim(training_train)
+```
+
+## modelling
+Run a quick comparison of models
+Referenced from H2O library code example
+```{r results='hide', message=FALSE}
+# Load library
+library(h2o)
+# start h2o cluster
+invisible(h2o.init())
+#convert variables to factors
+training_train[,y] = as.factor(pull(training_train,y))
+training_test[,y] = as.factor(pull(training_test,y))
+# convert data as h2o type
+train_h = as.h2o(training_train)
+test_h = as.h2o(training_test)
+# set label type
+y = 'classe'
+pred = setdiff(names(training_train), y)
+#convert variables to factors
+# Run AutoML for 20 base models
+aml = h2o.automl(x = pred, y = y,
+                  training_frame = train_h,
+                  max_models = 20,
+                  seed = 1,
+                  max_runtime_secs = 20
+                 )
+# prediction result on test data
+prediction = h2o.predict(aml@leader, test_h) %>%
+                         as.data.frame()
+```
+Show leaderboard of models
+```{r}
+# AutoML Leaderboard
+lb = aml@leaderboard
+print(lb, n = nrow(lb))
+```
+
+From this we see that GBM_2 gives the best performance
+We display performance matrices and history of the model here
+```{r}
+m <- aml@leader
+# create a confusion matrix
+caret::confusionMatrix(training_test$classe, prediction$predict)
+# close h2o connection
+#h2o.shutdown(prompt = F)
+m@parameters
+plot(m)
+```
+And finally the prediction on the test dataset (now validation dataset)
+
+```{r results='hide', message=FALSE}
+validation_h = as.h2o(testing)
+vprediction = h2o.predict(aml@leader, validation_h) %>%
+                         as.data.frame()
+```
+
+```{r}
+# converted to h2o frame
+
+vprediction
+pull(vprediction,predict)
+```
+
